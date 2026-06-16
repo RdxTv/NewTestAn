@@ -38,10 +38,12 @@ async def actors_directory_page(req):
         actors_grid_html = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:20px;">'
         for act in all_actors:
             act_id = str(act["_id"])
+            # ✅ GRID IMAGE REFRESH OVERRIDE
+            v_salt = int(time.time())
             actors_grid_html += f'''
             <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; transition:0.2s; cursor:pointer;" onclick="window.location.href='/actor/{act_id}'">
                 <div style="position:relative; padding-top:135%; background:var(--bg3); overflow:hidden;">
-                    <img src="/api/actor/photo?id={act_id}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" loading="lazy">
+                    <img src="/api/actor/photo?id={act_id}&v={v_salt}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" loading="lazy">
                 </div>
                 <div style="padding:12px; text-align:center;">
                     <div style="font-size:14px; font-weight:700; color:var(--text); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">{html.escape(act.get('name', ''))}</div>
@@ -133,7 +135,7 @@ async def api_create_actor(req):
         return web.HTTPFound(f'/admin/create_actor?err=Server Error: {str(e)}')
 
 # ─────────────────────────────────────────────────────────
-# 🖼️ ZERO-RAM GENERAL PHOTO ENGINE
+# 🖼️ ZERO-RAM GENERAL PHOTO ENGINE (CACHE BUSTER UPGRADE)
 # ─────────────────────────────────────────────────────────
 @actor_routes.get('/api/actor/photo')
 async def get_actor_photo(req):
@@ -161,7 +163,13 @@ async def get_actor_photo(req):
         file_data.close()
         del file_data
         
-        headers = {"Cache-Control": "public, max-age=31536000, immutable", "Content-Disposition": 'inline; filename="photo.jpg"'}
+        # ✅ HARD REFRESH FIX: ब्राउज़र कैशे को ब्लॉक करने वाले हेडर इंजेक्ट किए गए
+        headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Content-Disposition": 'inline; filename="photo.jpg"'
+        }
         return web.Response(body=body_bytes, content_type="image/jpeg", headers=headers)
     except Exception: return web.Response(status=500)
     finally: gc.collect()
@@ -199,7 +207,6 @@ async def actor_profile_display(req):
 
     gallery_grid_html = ""
     if role == 'admin':
-        # ✅ MULTIPLE SELECTION UPGRADE: input में multiple जोड़ा गया
         gallery_grid_html += f'''
         <div style="background:var(--card); border:1px dashed var(--border); padding:20px; border-radius:8px; text-align:center; margin-bottom:20px;">
             <form id="galleryForm" action="/api/actor/gallery_upload" method="post" enctype="multipart/form-data" style="margin:0;">
@@ -216,7 +223,6 @@ async def actor_profile_display(req):
     else:
         gallery_grid_html += '<div class="gallery-grid">'
         for i in range(len(gallery_list)):
-            # ✅ INDIVIDUAL DELETE UPGRADE: एडमिन के लिए गैलरी इमेज डिलीट बटन
             admin_img_actions = f'<button class="gal-del-btn" onclick="deleteGalleryImg(\'{actor_id}\', {i})">&#128465;</button>' if role == 'admin' else ""
             gallery_grid_html += f'''
             <div class="gallery-item-wrapper">
@@ -238,6 +244,9 @@ async def actor_profile_display(req):
     tags_json_payload = html.escape(json.dumps(tags_list))
     safe_bio = html.escape(actor.get("bio", ""))
 
+    # ✅ MASTER LIVE DYNAMIC TIME STAMP CACHE BUSTER
+    cache_salt = int(time.time())
+
     tab_engine_ui = f'''
     <style>
         .actor-tab-bar {{ display: flex; gap: 10px; border-bottom: 2px solid var(--border); margin-bottom: 25px; }}
@@ -247,7 +256,6 @@ async def actor_profile_display(req):
         .actor-panel {{ display: none; }}
         .actor-panel.active {{ display: block !important; }}
         
-        /* 📸 PROFILE PHOTO SIZE UPGRADE (Aspect Ratio 1:1 Square & Zero Side Blank Space) */
         .actor-hero-box {{ display:flex; gap:25px; background:var(--card); border:1px solid var(--border); padding:25px; border-radius:12px; margin-bottom:35px; flex-wrap:wrap; }}
         .profile-img-wrap {{ width:240px; height:240px; background:var(--bg3); border-radius:12px; overflow:hidden; border:1px solid var(--border); flex-shrink:0; position:relative; }}
         .profile-img-wrap img {{ width:100%; height:100%; object-fit:cover; }}
@@ -265,7 +273,6 @@ async def actor_profile_display(req):
         .edit-modal.open {{ display: flex !important; }}
         .em-card {{ background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 25px; width: 100%; max-width: 480px; box-shadow: 0 10px 30px rgba(0,0,0,.5); position: relative; margin: auto; }}
         
-        /* 🚨 NOTIFICATION LOADING OVERLAY */
         .upload-overlay {{ position: fixed; inset:0; background: rgba(0,0,0,0.85); z-index: 9999; display: none; flex-direction: column; align-items: center; justify-content: center; color: #fff; }}
         .upload-overlay.show {{ display: flex !important; }}
         .progress-box {{ width: 80%; max-width: 300px; height: 6px; background: var(--bg4); border-radius: 3px; overflow: hidden; margin-top: 15px; }}
@@ -283,7 +290,7 @@ async def actor_profile_display(req):
         
         <div class="actor-hero-box">
             <div class="profile-img-wrap">
-                <img src="/api/actor/photo?id={actor_id}">
+                <img src="/api/actor/photo?id={actor_id}&v={cache_salt}">
             </div>
             <div style="flex:1; min-width:300px; display:flex; flex-direction:column; justify-content:center;">
                 <h1 style="font-size:32px; font-weight:900; color:var(--text); margin-bottom:2px;">{html.escape(actor_name)}</h1>
@@ -407,7 +414,7 @@ async def actor_profile_display(req):
         function closeActorEditModal() {{ document.getElementById('actorEditModal').classList.remove('open'); }}
         function resetActorSearchPage() {{ actCurPage = 1; actOffset = 0; }}
 
-        // ✅ MULTI-UPLOAD PROGRESS NOTIFICATION PIPELINE
+        // MULTI-UPLOAD PROGRESS NOTIFICATION PIPELINE
         async function submitGalleryForm() {{
             var form = document.getElementById('galleryForm');
             var input = form.querySelector('input[type="file"]');
@@ -449,7 +456,7 @@ async def actor_profile_display(req):
             }}
         }}
 
-        // ✅ PROFILE FORM EDIT WITH NOTIFICATION LOGIC
+        // PROFILE FORM EDIT WITH NOTIFICATION LOGIC
         async function submitActorProfileForm(event) {{
             event.preventDefault();
             var form = document.getElementById('actorUpdateForm');
@@ -485,7 +492,7 @@ async def actor_profile_display(req):
             }}
         }}
 
-        // ✅ PURGE WHOLE PROFILE AJAX
+        // PURGE WHOLE PROFILE AJAX
         async function deleteActorProfileMaster(actorId) {{
             if(!confirm("⚠️ क्या आप सचमुच इस एक्टर की पूरी प्रोफाइल और गैलरी डेटाबेस से हमेशा के लिए डिलीट करना चाहते हैं?")) return;
             try {{
@@ -498,7 +505,7 @@ async def actor_profile_display(req):
             }} catch(e) {{ alert("Database response error."); }}
         }}
 
-        // ✅ PURGE SINGLE GALLERY IMAGE AJAX
+        // PURGE SINGLE GALLERY IMAGE AJAX
         async function deleteGalleryImg(actorId, idx) {{
             if(!confirm("क्या आप इस तस्वीर को गैलरी से हटाना चाहते हैं?")) return;
             try {{
@@ -702,7 +709,6 @@ async def api_actor_gallery_upload(req):
         if not actor_id or not uploaded_tg_ids:
             return web.json_response({"error": "No assets packet uploaded"}, status=400)
         
-        # $each का इस्तेमाल करके मल्टीपल फोटो एरे को एक साथ मोंगो डेटाबेस में पुश करना
         await actors.update_one(
             {"_id": ObjectId(actor_id)}, 
             {"$push": {"gallery": {"$each": uploaded_tg_ids}}}
