@@ -11,7 +11,60 @@ from web.web_assets import build_page, get_auth, form_wrapper
 actor_routes = web.RouteTableDef()
 
 # ─────────────────────────────────────────────────────────
-# 🎭 ADMIN VIEW: CREATE ACTOR PROFILE PAGE
+# 🎭 PUBLIC VIEW: ACTORS DIRECTORY CATALOG PAGE
+# ─────────────────────────────────────────────────────────
+@actor_routes.get('/actors')
+async def actors_directory_page(req):
+    role, _ = await get_auth(req)
+    if not role: 
+        return web.HTTPFound('/login')
+        
+    # डेटाबेस से सभी एक्टर्स को नए से पुराने के क्रम में निकालना
+    cursor = actors.find({}).sort("created_at", -1)
+    all_actors = await cursor.to_list(length=200)
+    
+    # अगर एडमिन है तो सबसे ऊपर क्रिएशन एक्शन बटन दिखाओ
+    admin_header_action = ""
+    if role == 'admin':
+        admin_header_action = '''
+        <div style="display:flex; justify-content:flex-end; margin-bottom:25px;">
+            <a href="/admin/create_actor" style="background:var(--accent); color:#fff; padding:12px 24px; border-radius:8px; font-weight:700; text-decoration:none; font-size:14px; transition:0.2s; box-shadow:0 4px 15px rgba(229,9,20,0.3);">➕ Create New Actor</a>
+        </div>
+        '''
+        
+    actors_grid_html = ""
+    if not all_actors:
+        actors_grid_html = '<div style="color:var(--muted); text-align:center; padding:60px 20px; grid-column:1/-1;">🎭 No actor profiles created yet.</div>'
+    else:
+        actors_grid_html = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:20px;">'
+        for act in all_actors:
+            act_id = str(act["_id"])
+            actors_grid_html += f'''
+            <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; transition:0.2s; cursor:pointer;" onclick="window.location.href='/actor/{act_id}'">
+                <div style="position:relative; padding-top:135%; background:var(--bg3); overflow:hidden;">
+                    <img src="/api/actor/photo?id={act_id}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" loading="lazy">
+                </div>
+                <div style="padding:12px; text-align:center;">
+                    <div style="font-size:14px; font-weight:700; color:var(--text); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">{act.get('name')}</div>
+                </div>
+            </div>
+            '''
+        actors_grid_html += '</div>'
+
+    page_body = f'''
+    <div class="main" style="padding-top:30px; max-width:1100px; margin:0 auto; padding-left:20px; padding-right:20px;">
+        <div style="margin-bottom:20px;">
+            <h1 style="font-size:28px; font-weight:900; color:var(--text); margin-bottom:4px;">🎭 Actors Catalog</h1>
+            <p style="color:var(--muted); font-size:14px;">Browse verified star profiles and linked content grids.</p>
+        </div>
+        {admin_header_action}
+        {actors_grid_html}
+    </div>
+    '''
+    return build_page("Actors Directory - Fast Finder", page_body, "", "actors", role)
+
+# ─────────────────────────────────────────────────────────
+# 🎭 ADMIN VIEW: CREATE ACTOR PROFILE PAGE FORM
 # ─────────────────────────────────────────────────────────
 @actor_routes.get('/admin/create_actor')
 async def create_actor_page(req):
@@ -29,6 +82,7 @@ async def create_actor_page(req):
         
         <button class="submit-btn" type="submit" style="background:var(--accent); color:#fff; width:100%; padding:14px; border:0; border-radius:6px; font-weight:700; cursor:pointer; margin-top:10px;">Create Actor Profile</button>
     </form>
+    <div style="margin-top:15px; text-align:center;"><a href="/actors" style="color:var(--muted); text-decoration:none; font-size:13px;">← Back to Actors Catalog</a></div>
     '''
     return build_page("Create Actor Profile", form_wrapper("Add New Actor", content, req.query.get('err',''), req.query.get('msg','')), "login-bg", "actors", role)
 
@@ -75,7 +129,7 @@ async def api_create_actor(req):
         }
         await actors.insert_one(actor_doc)
         
-        return web.HTTPFound(f'/admin/create_actor?msg=Actor Profile created for {name}!')
+        return web.HTTPFound('/actors?msg=Actor Profile created successfully!')
     except Exception as e:
         return web.HTTPFound(f'/admin/create_actor?err=Server Error: {str(e)}')
 
@@ -154,7 +208,6 @@ async def actor_profile_display(req):
             '''
         grid_html += '</div>'
 
-    # ✅ फिक्स: स्टाइल और स्क्रिप्ट के अंदर मौजूद सभी { } को डबल {{ }} कर दिया गया है ताकि पाइथन पार्सर कोई एरर न दे।
     tab_engine_ui = f'''
     <style>
         .actor-tab-bar {{ display: flex; gap: 10px; border-bottom: 2px solid var(--border); margin-bottom: 25px; }}
@@ -168,6 +221,7 @@ async def actor_profile_display(req):
     </style>
 
     <div class="main" style="padding-top:30px; max-width:1100px; margin: 0 auto; padding-left:20px; padding-right:20px;">
+        <div style="margin-bottom:15px;"><a href="/actors" style="color:var(--muted); text-decoration:none; font-size:14px; font-weight:700;">← Back to Catalog</a></div>
         <div style="display:flex; gap:25px; background:var(--card); border:1px solid var(--border); padding:25px; border-radius:12px; margin-bottom:35px; flex-wrap:wrap;">
             <div style="width:160px; height:220px; background:var(--bg3); border-radius:8px; overflow:hidden; border:1px solid var(--border); flex-shrink:0;">
                 <img src="/api/actor/photo?id={actor_id}" style="width:100%; height:100%; object-fit:cover;">
