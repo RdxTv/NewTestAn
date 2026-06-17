@@ -38,11 +38,11 @@ async def actors_directory_page(req):
         actors_grid_html = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:20px;">'
         for act in all_actors:
             act_id = str(act["_id"])
-            current_ts = int(time.time())
+            # ✅ FIX: टाइमस्टैम्प हटा दिया गया है ताकि पूरी लिस्ट बार-बार लोड होकर सर्वर/डेटा पर लोड न डाले
             actors_grid_html += f'''
             <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; transition:0.2s; cursor:pointer;" onclick="window.location.href='/actor/{act_id}'">
                 <div style="position:relative; padding-top:135%; background:var(--bg3); overflow:hidden;">
-                    <img src="/api/actor/photo?id={act_id}&t={current_ts}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" loading="lazy">
+                    <img src="/api/actor/photo?id={act_id}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" loading="lazy">
                 </div>
                 <div style="padding:12px; text-align:center;">
                     <div style="font-size:14px; font-weight:700; color:var(--text); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">{html.escape(act.get('name', ''))}</div>
@@ -300,7 +300,7 @@ async def actor_profile_display(req):
         .cdd-radio-dot-actor {{ width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: none; }}
         .cdd-item-actor.selected .cdd-radio-dot-actor {{ display: block; }}
 
-        /* ✅ FIX: मोबाइल में 1 कॉलम और PC में 3 कॉलम ग्रिड व्यवस्था */
+        /* ✅ मोबाइल में 1 कॉलम और PC में 3 कॉलम ग्रिड व्यवस्था */
         .res-grid {{ display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 24px; }}
         @media(min-width:768px){{ .res-grid {{ grid-template-columns: repeat(3, 1fr); gap: 16px; }} }}
         .file-card {{ background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); transition: transform .22s cubic-bezier(.4,0,.2,1),box-shadow .22s; cursor: pointer; }}
@@ -333,12 +333,12 @@ async def actor_profile_display(req):
         @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
         .empty {{ text-align: center; padding: 60px 20px; color: var(--muted); grid-column: 1/-1; }}
 
-        /* ✅ FIX: एक्टर मास्टर फोटो साइज को रिस्पॉन्सिवली बढ़ाना */
-        .actor-header-wrap {{ display: flex; gap: 25px; background: var(--card); border: 1px solid var(--border); padding: 25px; border-radius: 12px; margin-bottom: 35px; flex-direction: column; align-items: center; }}
-        .avatar-box-master {{ width: 240px; height: 320px; background: var(--bg3); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); flex-shrink: 0; }}
+        /* ✅ FIX: एक्टर मास्टर फोटो साइज को बढ़ाया गया और मोबाइल में खाली स्पेस को भरा गया */
+        .actor-header-wrap {{ display: flex; gap: 25px; background: var(--card); border: 1px solid var(--border); padding: 25px; border-radius: 12px; margin-bottom: 35px; flex-direction: column; align-items: center; width: 100%; box-sizing: border-box; }}
+        .avatar-box-master {{ width: 100%; max-width: 340px; height: auto; aspect-ratio: 3 / 4; background: var(--bg3); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); flex-shrink: 0; }}
         @media(min-width:768px){{
           .actor-header-wrap {{ flex-direction: row; align-items: stretch; }}
-          .avatar-box-master {{ width: 220px; height: 300px; }}
+          .avatar-box-master {{ width: 260px; height: 350px; max-width: none; aspect-ratio: auto; }}
         }}
     </style>
 
@@ -349,7 +349,7 @@ async def actor_profile_display(req):
             <div class="avatar-box-master">
                 <img id="actorMasterAvatarImage" src="/api/actor/photo?id={actor_id}&t={master_ts}" style="width:100%; height:100%; object-fit:cover;">
             </div>
-            <div style="flex:1; min-width:300px; display:flex; flex-direction:column; justify-content:center;">
+            <div style="flex:1; min-width:300px; display:flex; flex-direction:column; justify-content:center; width: 100%;">
                 <h1 style="font-size:32px; font-weight:900; color:var(--text); margin-bottom:2px;">{html.escape(actor_name)}</h1>
                 {tags_chips_html}
                 {social_html}
