@@ -18,7 +18,6 @@ async def migrate_media_cmd(client, message):
         "Scanning database collections for legacy media items."
     )
     
-    # लाइव PM काउंट ट्रैकर
     stats_tracker = {
         "actor": {"profile": 0, "gallery": 0},
         "app": {"profile": 0, "gallery": 0},
@@ -28,14 +27,10 @@ async def migrate_media_cmd(client, message):
     thumb_success, thumb_skipped = 0, 0
     total_processed = 0
     
-    # Helper Function: PM में लाइव स्टेटस एडिट करने के लिए
     async def safe_edit_status(text):
-        try:
-            await status_msg.edit(text)
-        except MessageNotModified:
-            pass
-        except Exception:
-            pass
+        try: await status_msg.edit(text)
+        except MessageNotModified: pass
+        except Exception: pass
 
     # ─────────────────────────────────────────────────────────
     # 🎭 PHASE 1: DIRECTORY MIGRATION (ACTOR, APP, WEBSITE)
@@ -45,8 +40,7 @@ async def migrate_media_cmd(client, message):
         cursor = actors.find({})
         async for actor in cursor:
             category = actor.get("category", "actor")
-            if category not in stats_tracker:
-                category = "actor"
+            if category not in stats_tracker: category = "actor"
 
             # 1. मुख्य प्रोफाइल फोटो का ट्रांसफर
             p_img = actor.get("photo_url")
@@ -64,39 +58,27 @@ async def migrate_media_cmd(client, message):
                                 new_file_id = new_msg.photo.sizes[-1].file_id if hasattr(new_msg.photo, "sizes") and new_msg.photo.sizes else new_msg.photo.file_id
                                 
                                 if new_file_id:
-                                    # 📝 LOGS: ओल्ड बनाम न्यू ID का लाइव मुकाबला
                                     logger.info(f"📁 [ACTOR PROFILE] OLD ID: {raw_file_id[:20]}... ➡️ NEW ID: {new_file_id[:20]}...")
-                                    
                                     res = await actors.update_one(
                                         {"_id": actor["_id"]}, 
                                         {"$set": {"photo_url": f"TG_ID:{new_file_id}", "is_actor_permanent": True}}
                                     )
-                                    
-                                    # सिर्फ तभी काउंट बढ़ाएं जब डेटाबेस मॉडिफाई हुआ हो
                                     if res.modified_count > 0:
                                         stats_tracker[category]["profile"] += 1
-                                        logger.info("✅ [DATABASE SUCCESS] Actor Profile ID modified successfully!")
                         
                         total_processed += 1
-                        if total_processed % 5 == 0:
-                            await safe_edit_status(
-                                f"⏳ <b>Phase 1/2: Migrating Directory Hub...</b>\n\n"
-                                f"🎭 <b>Actors Profiles Modified:</b> <code>{stats_tracker['actor']['profile']}</code> | Gallery: <code>{stats_tracker['actor']['gallery']}</code>\n"
-                                f"📱 <b>Apps Profiles Modified:</b> <code>{stats_tracker['app']['profile']}</code> | Gallery: <code>{stats_tracker['app']['gallery']}</code>\n"
-                                f"🌐 <b>Websites Profiles Modified:</b> <code>{stats_tracker['website']['profile']}</code> | Gallery: <code>{stats_tracker['website']['gallery']}</code>\n\n"
-                                f"⏱️ <i>Strict 1-3s Dynamic Delay Engine Active...</i>"
-                            )
-                        
                         await asyncio.sleep(random.uniform(1.0, 3.0))
                         break
-                        
-                    except FloodWait as e:
-                        await asyncio.sleep(e.value + 2)
+                    except FloodWait as e: await asyncio.sleep(e.value + 2)
                     except Exception as err:
                         logger.error(f"Directory Photo Shift Error: {err}")
                         break
 
-            # 2. लाइटबॉक्स गैलरी एरे का ट्रांसफर
+            # 2. लाइटबॉक्स गैलरी एरे का ट्रांसफर (🔒 DOUBLE RUN PROTECTION ADDED)
+            # यदि इस डॉक्यूमेंट की गैलरी पहले ही पूरी तरह परमानेंट मार्क हो चुकी है, तो इसे स्किप करें
+            if actor.get("is_gallery_permanent"):
+                continue
+
             gallery = actor.get("gallery", [])
             if gallery:
                 new_gallery = []
@@ -117,17 +99,13 @@ async def migrate_media_cmd(client, message):
                                         new_f_id = new_msg.photo.sizes[-1].file_id if hasattr(new_msg.photo, "sizes") and new_msg.photo.sizes else new_msg.photo.file_id
                                         
                                         if new_f_id:
-                                            # 📝 LOGS: गैलरी ओल्ड बनाम न्यू ID
                                             logger.info(f"🖼️ [GALLERY IMAGE] OLD ID: {raw_g_id[:20]}... ➡️ NEW ID: {new_f_id[:20]}...")
                                             new_gallery.append(f"TG_ID:{new_f_id}")
                                             stats_tracker[category]["gallery"] += 1
                                             has_changed = True
-                                        else:
-                                            new_gallery.append(g_id)
-                                    else:
-                                        new_gallery.append(g_id)
-                                else:
-                                    new_gallery.append(g_id)
+                                        else: new_gallery.append(g_id)
+                                    else: new_gallery.append(g_id)
+                                else: new_gallery.append(g_id)
                                     
                                 total_processed += 1
                                 if total_processed % 5 == 0:
@@ -141,9 +119,7 @@ async def migrate_media_cmd(client, message):
                                     
                                 await asyncio.sleep(random.uniform(1.0, 3.0))
                                 break
-                                
-                            except FloodWait as e:
-                                await asyncio.sleep(e.value + 2)
+                            except FloodWait as e: await asyncio.sleep(e.value + 2)
                             except Exception:
                                 new_gallery.append(g_id)
                                 break
@@ -151,9 +127,13 @@ async def migrate_media_cmd(client, message):
                         new_gallery.append(g_id)
                 
                 if has_changed and len(new_gallery) == len(gallery):
-                    res = await actors.update_one({"_id": actor["_id"]}, {"$set": {"gallery": new_gallery}})
+                    # ✅ मोंगोडीबी लॉक पैच: गैलरी अपडेट होते ही 'is_gallery_permanent: True' सेट कर दिया
+                    res = await actors.update_one(
+                        {"_id": actor["_id"]}, 
+                        {"$set": {"gallery": new_gallery, "is_gallery_permanent": True}}
+                    )
                     if res.modified_count > 0:
-                        logger.info("✅ [DATABASE SUCCESS] Actor Gallery Array updated successfully!")
+                        logger.info("✅ [DATABASE SUCCESS] Actor Gallery Array updated and hard-locked!")
                     
     except Exception as e:
         logger.error(f"Directory Migration Crash: {e}")
@@ -164,8 +144,7 @@ async def migrate_media_cmd(client, message):
     try:
         await safe_edit_status("⏳ <b>Phase 2/2: Opening Vault & Scanning Movie Posters...</b>")
         for name, col in COLLECTIONS.items():
-            if name == "actors": 
-                continue
+            if name == "actors": continue
             
             cursor = col.find({"thumb_url": {"$exists": True, "$regex": "^TG_ID:"}})
             async for doc in cursor:
@@ -177,7 +156,6 @@ async def migrate_media_cmd(client, message):
                     while True:
                         try:
                             file_buffer = await client.download_media(raw_thumb_id, in_memory=True)
-                            
                             if file_buffer:
                                 file_buffer.seek(0)
                                 new_msg = await client.send_photo(chat_id=THUMBNAIL_STORAGE_CHANNEL, photo=file_buffer)
@@ -186,15 +164,11 @@ async def migrate_media_cmd(client, message):
                                     new_t_id = new_msg.photo.sizes[-1].file_id if hasattr(new_msg.photo, "sizes") and new_msg.photo.sizes else new_msg.photo.file_id
                                     
                                     if new_t_id:
-                                        # 📝 LOGS: मूवी थंबनेल ओल्ड बनाम न्यू ID
                                         logger.info(f"🎬 [MOVIE THUMB] OLD ID: {raw_thumb_id[:20]}... ➡️ NEW ID: {new_t_id[:20]}...")
-                                        
                                         res = await col.update_one(
                                             {"_id": doc["_id"]}, 
                                             {"$set": {"thumb_url": f"TG_ID:{new_t_id}", "is_thumb_permanent": True}}
                                         )
-                                        
-                                        # सिर्फ तभी काउंट बढ़ाएं जब डेटाबेस डॉक्यूमेंट मॉडिफाई हुआ हो
                                         if res.modified_count > 0:
                                             thumb_success += 1
                                             logger.info(f"✅ [DATABASE SUCCESS] Movie Thumb ID modified in {name.upper()}!")
@@ -207,12 +181,9 @@ async def migrate_media_cmd(client, message):
                                     f"⚠️ Skipped/Permanent: <code>{thumb_skipped}</code>\n"
                                     f"📊 Current Collection: <code>{name.upper()}</code>"
                                 )
-                            
                             await asyncio.sleep(random.uniform(1.0, 3.0))
                             break
-                            
-                        except FloodWait as e:
-                            await asyncio.sleep(e.value + 2)
+                        except FloodWait as e: await asyncio.sleep(e.value + 2)
                         except Exception as e:
                             logger.error(f"Thumbnail Migration Failed: {e}")
                             thumb_skipped += 1
@@ -222,7 +193,6 @@ async def migrate_media_cmd(client, message):
     except Exception as e:
         logger.error(f"Thumbnail Migration Crash: {e}")
 
-    # 📊 अंतिम टेलीमेट्री माइग्रेशन रिपोर्ट (सख्त मॉडिफाइड काउंट के साथ)
     report = (
         "<b>🎉 Smart Media Migration Matrix Complete!</b>\n\n"
         f"🎭 <b>Actors Modified Count:</b> <code>{stats_tracker['actor']['profile']} Profiles</code> | <code>{stats_tracker['actor']['gallery']} Gallery</code>\n"
@@ -230,7 +200,6 @@ async def migrate_media_cmd(client, message):
         f"🌐 <b>Websites Modified Count:</b> <code>{stats_tracker['website']['profile']} Profiles</code> | <code>{stats_tracker['website']['gallery']} Gallery</code>\n"
         f"🖼️ <b>Thumbnails Modified Count:</b> <code>{thumb_success} Movie Posters</code>\n"
         f"⚠️ <b>Skipped / Clean:</b> <code>{thumb_skipped} Files</code>\n\n"
-        "⚡ <i>All assets safely isolated into separate channels! Verification Logs compiled successfully.</i>\n"
-        "💡 <u>Tip:</u> अब आप इस <code>migrate_media.py</code> फाइल को डिलीट कर सकते हैं।"
+        "⚡ <i>All assets safely isolated into separate channels! Double-run protection activated.</i>"
     )
     await safe_edit_status(report)
