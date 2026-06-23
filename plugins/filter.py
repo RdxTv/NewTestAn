@@ -47,7 +47,7 @@ async def start_auto_delete_timer(client, chat_id, message_id, delay=300):
     """5 मिनट बाद मैसेज को डिलीट करने का टास्क, जो एक्टिविटी होने पर रिसेट हो सकता है"""
     task_key = f"{chat_id}_{message_id}"
     
-    # अगर इस मैसेज का टाइमर पहले से चल रहा है, तो उसे तुरंत कैंसिल (Reset) करें
+    # अगर इस मैसेज का टाइमर पहले से चल रहा है, Outer Time Cancel (Reset) करें
     if task_key in ACTIVE_DELETE_TASKS:
         try:
             ACTIVE_DELETE_TASKS[task_key].cancel()
@@ -111,12 +111,8 @@ def get_filter_ui(search, files, total, act_src, offset, chat_id, req_id, key, n
 
     btn = []
     
-    # ⚡ अगर सोर्स कंबाइंड है (जैसे Primary+Cloud) तो पेजिनेशन 'all' में होगा
     act_src_lower = act_src.lower()
-    if "+" in act_src_lower or act_src_lower == "all":
-        act_src_short = "all"
-    else:
-        act_src_short = SRC_TO_SHORT.get(act_src_lower, "pri")
+    act_src_short = SRC_TO_SHORT.get(act_src_lower, "all")
 
     nav = []
     prev_off = int(offset) - MAX_BOT_RESULTS
@@ -132,8 +128,8 @@ def get_filter_ui(search, files, total, act_src, offset, chat_id, req_id, key, n
     if not simple_mode:
         col_btn = []
         for c in ["primary", "cloud", "archive"]:
-            # ✅ जो कलेक्शन शामिल हैं, उन पर ग्रीन टिक लगाएँ
-            tick = "✅" if c in act_src_lower else "📂"
+            # ✅ अगर सोर्स 'all' है तो सब पर टिक लगाओ, वरना सिर्फ उसी पर लगाओ जो मैच हो
+            tick = "✅" if (act_src_lower == "all" or c == act_src_lower) else "📂"
             col_btn.append(InlineKeyboardButton(f"{tick} {c.title()}", callback_data=f"coll_{req_id}_{key}_{SRC_TO_SHORT[c]}"))
         btn.append(col_btn)
         btn.append([InlineKeyboardButton("❌ Close Result", callback_data=f"close_{req_id}")])
