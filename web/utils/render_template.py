@@ -1,4 +1,13 @@
-<!DOCTYPE html>
+import urllib.parse, html, logging
+from info import BIN_CHANNEL, URL
+from utils import temp
+
+logger = logging.getLogger(__name__)
+
+# ─────────────────────────────────────────────
+# 🎬 FAST FINDER OPTIMIZED STREAM TEMPLATE
+# ─────────────────────────────────────────────
+watch_tmplt = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>{heading}</title>
@@ -61,7 +70,7 @@ html.light .skip-ripple{{background:rgba(0,0,0,.1);}}
 <div class="info-section"><div class="title">{file_name}</div>
 <div class="controls-row">
 <a href="{src}" class="btn btn-download"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 16L7 11H10V4H14V11H17L12 16ZM5 20V18H19V20H5Z"/></svg>Download</a>
-<button onclick="copyLink()" class="btn btn-copy"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M16 1H4C2.9 1 2 1.9 2 3V17H4V3H16V1ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 21H8V7H19V21Z"/></svg>Copy Link</button>
+<button onclick="copyLink()" class="btn btn-copy"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M16 1H4C2.9 1 2 1.9 2 3V17H4V3H16V1ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 21H8V7H19V21Z"/></svg>Copy Link</button>
 </div></div></div>
 <div id="toast">Link Copied!</div>
 
@@ -101,6 +110,7 @@ player.on('ready',()=>{{
         tc++; 
         clearTimeout(tmr);
         
+        // ✅ FIX: यूट्यूब स्टाइल प्रोग्रेसिव 10s जंप और रिपल एनीमेशन सिंक किया गया
         let t = tc * 10; 
         z.querySelector('.skip-text').innerText = t + 's';
         z.classList.remove('active'); void z.offsetWidth; z.classList.add('active');
@@ -117,4 +127,28 @@ player.on('ready',()=>{{
 
 function copyLink(){{navigator.clipboard.writeText("{src}"); let t=document.getElementById("toast"); t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3000);}}
 </script>
-</body></html>
+</body></html>"""
+
+# ─────────────────────────────────────────────
+# 🎬 MEDIA WATCH FUNCTION
+# ─────────────────────────────────────────────
+async def media_watch(message_id):
+    try:
+        msg = await temp.BOT.get_messages(BIN_CHANNEL, message_id)
+        media = getattr(msg, msg.media.value, None) if msg and msg.media else None
+
+        if not media:
+            return "<h2 style='color:#fff;text-align:center;padding:50px;'>❌ File Not Found</h2>"
+
+        src = urllib.parse.urljoin(URL, f'download/{message_id}')
+        mime = getattr(media, 'mime_type', 'video/mp4')
+
+        if mime.split('/')[0].strip() == 'video':
+            fn = html.escape(getattr(media, 'file_name', "Fast Finder Movie"))
+            return watch_tmplt.format(heading=f"Watch {fn}", file_name=fn, src=src, mime_type=mime)
+        
+        return f'<body style="background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:\'DM Sans\',sans-serif;"><div style="text-align:center;background:#141414;padding:40px;border-radius:12px;border:1px solid rgba(255,255,255,.08);"><h2>⚠️ Unsupported File</h2><br><a href="{src}" style="background:#e50914;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">Download Direct</a></div></body>'
+
+    except Exception as e:
+        logger.error(f"Watch Error: {e}")
+        return f"<h2 style='color:red;text-align:center;'>Server Error: {e}</h2>"
