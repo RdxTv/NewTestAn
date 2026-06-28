@@ -29,8 +29,13 @@ CSS = """
 .file-card:active{transform:scale(.96);transition:transform .1s}
 
 /* ── STAGGERED CARD ENTRANCE ANIMATION ── */
-@keyframes cardEnter{0%{opacity:0;transform:translateY(28px) scale(0.95)}60%{opacity:1;transform:translateY(-4px) scale(1.01)}100%{opacity:1;transform:translateY(0) scale(1)}}
-.card-enter{opacity:0;animation:cardEnter .45s cubic-bezier(.22,1,.36,1) forwards}
+@keyframes cardEnter{
+  0%  {opacity:0;transform:translateY(36px) scale(0.93)}
+  55% {opacity:1;transform:translateY(-5px) scale(1.015)}
+  75% {transform:translateY(2px) scale(0.998)}
+  100%{opacity:1;transform:translateY(0) scale(1)}
+}
+.card-enter{opacity:0;animation:cardEnter .6s cubic-bezier(.34,1.2,.64,1) forwards}
 
 /* ── Poster box (With Shimmer Effect) ── */
 .poster-box{position:relative;padding-top:56.25%;background:linear-gradient(90deg, var(--bg3) 0px, var(--bg4) 50%, var(--bg3) 100%);background-size:200% 100%;animation:shimmer 1.5s infinite linear;overflow:hidden;width:100%}
@@ -245,7 +250,7 @@ function refreshGridAfterEdit() {
 }
 function staggerCards(container){
     container.querySelectorAll('.card-enter').forEach(function(c,i){
-        c.style.animationDelay=(Math.min(i,10)*0.05)+'s';
+        c.style.animationDelay=(Math.min(i,10)*0.08)+'s';
     });
 }
 """.replace("__LIMIT_PLACEHOLDER__", str(MAX_WEB_RESULTS))
